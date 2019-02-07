@@ -20,7 +20,8 @@
 
 #include <Usb.h>
 
-#define REQUEST_SIZE 32
+#define USBTMC_COMMAND_SIZE 64
+#define USBTMC_REQUEST_SIZE 32
 
 enum USBTMC_State { USBTMC_Request, USBTMC_Receive, USBTMC_Idle };
 

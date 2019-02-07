@@ -238,7 +238,7 @@ void USBTMC::Run()
     switch (CommandState)
     {
         case USBTMC_Request:
-            rcode = BulkOut_Request(REQUEST_SIZE);
+            rcode = BulkOut_Request(USBTMC_REQUEST_SIZE);
 
             if (rcode)
             {
@@ -254,12 +254,12 @@ void USBTMC::Run()
             break;
 
         case USBTMC_Receive:
-            uint8_t buf[REQUEST_SIZE];
+            uint8_t buf[USBTMC_REQUEST_SIZE];
             uint16_t rcvd;
 
-            for (int i = 0; i < REQUEST_SIZE; i++)
+            for (int i = 0; i < USBTMC_REQUEST_SIZE; i++)
                 buf[i] = 0;
-            rcvd = REQUEST_SIZE;
+            rcvd = USBTMC_REQUEST_SIZE;
 
             rcode = BulkIn(&rcvd, buf);
 
@@ -354,13 +354,15 @@ uint8_t USBTMC::Release()
 
 uint8_t USBTMC::BulkOut_Data(uint8_t nbytes, uint8_t* dataptr)
 {
-    uint8_t message[32];
-    uint16_t messageSize = 12;
+#define RESERVED_SIZE 12
+#define DEV_MESSAGE_BEGIN RESERVED_SIZE
+    uint8_t message[USBTMC_COMMAND_SIZE + RESERVED_SIZE];
+    uint16_t messageSize = RESERVED_SIZE;
     uint8_t rcode = 0;
 
-    if (nbytes > 20)
+    if (nbytes > USBTMC_COMMAND_SIZE)
     {
-        pAsync->OnError("USBTMC BulkOut Error: Message size must be less than 20 chars");
+        pAsync->OnError("USBTMC BulkOut Error: Message size must be less than USBTMC_COMMAND_SIZE");
         rcode = hrUNDEF;
         return rcode;
     }
@@ -394,7 +396,7 @@ uint8_t USBTMC::BulkOut_Data(uint8_t nbytes, uint8_t* dataptr)
     message[11] = 0x00;
 
     //Device dependent message data bytes
-    for (uint16_t i = 12; i < messageSize; i++)
+    for (uint16_t i = DEV_MESSAGE_BEGIN; i < messageSize; i++)
         message[i] = *dataptr++;
 
     uint16_t quotient = messageSize / 4;
@@ -408,12 +410,16 @@ uint8_t USBTMC::BulkOut_Data(uint8_t nbytes, uint8_t* dataptr)
         Release();
     }
     return rcode;
+
+#undef DEV_MESSAGE_BEGIN
+#undef RESERVED_SIZE
 }
 
 uint8_t USBTMC::BulkOut_Request(uint8_t nbytes)
 {
-    uint8_t message[12];
-    uint16_t messageSize = 12;
+#define MESSAGE_SIZE 12
+    uint8_t message[MESSAGE_SIZE];
+    uint16_t messageSize = MESSAGE_SIZE;
     uint8_t rcode = 0;
 
     //0:MsgID
@@ -449,10 +455,14 @@ uint8_t USBTMC::BulkOut_Request(uint8_t nbytes)
         Release();
     }
     return rcode;
+
+#undef MESSAGE_SIZE
 }
 
 uint8_t USBTMC::BulkIn(uint16_t* bytes_rcvd, uint8_t* dataptr)
 {
+#define EXPECTED_SIZE 12
+
     uint8_t packet_size = epInfo[epDataInIndex].maxPktSize;
     uint8_t message[packet_size];
     uint16_t rcvd = packet_size;
@@ -471,7 +481,7 @@ uint8_t USBTMC::BulkIn(uint16_t* bytes_rcvd, uint8_t* dataptr)
         return rcode;
     }
 
-    if (rcvd < 12)
+    if (rcvd < EXPECTED_SIZE)
     {
         pAsync->OnError("USBTMC BulkIn Error: Received unexpected size");
         *bytes_rcvd = 0;
@@ -499,11 +509,13 @@ uint8_t USBTMC::BulkIn(uint16_t* bytes_rcvd, uint8_t* dataptr)
     }
 
     for (uint32_t i = 0; i < data_size; i++)
-        *dataptr++ = message[i + 12];
+        *dataptr++ = message[i + EXPECTED_SIZE];
 
     *bytes_rcvd = (uint8_t)data_size;
 
     return rcode;
+
+#undef EXPECTED_SIZE
 }
 
 void USBTMC::PrintEndpointDescriptor(const USB_ENDPOINT_DESCRIPTOR* ep_ptr)
