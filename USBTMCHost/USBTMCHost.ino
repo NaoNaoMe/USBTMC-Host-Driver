@@ -20,7 +20,7 @@ class USBTMCAsync : public USBTMCAsyncOper
 {
   public:
     bool OnReceived(uint8_t data);
-    void OnError(String info);
+    void OnError(String info, bool newline);
 };
 
 bool USBTMCAsync::OnReceived(uint8_t data)
@@ -37,10 +37,11 @@ bool USBTMCAsync::OnReceived(uint8_t data)
     }
 }
 
-void USBTMCAsync::OnError(String info)
+void USBTMCAsync::OnError(String info, bool newline)
 {
     Serial.print(info);
-    Serial.write((uint8_t)SerialTerminator);
+    if(newline)
+        Serial.write((uint8_t)SerialTerminator);
 }
 
 USB Usb;
@@ -54,10 +55,10 @@ void setup()
 #if !defined(__MIPSEL__)
     while (!Serial); // Wait for serial port to connect - used on Leonardo, Teensy and other boards with built-in USB CDC serial connection
 #endif
-    Serial.println("USBTMC Host Start");
+    Serial.println(F("USBTMC Host Start"));
 
     if (Usb.Init() == -1)
-        Serial.println("OSC did not start.");
+        Serial.println(F("OSC did not start."));
 
     delay(200);
 }
@@ -79,50 +80,50 @@ void loop()
             isFirstTime = true;
 
             uint8_t interface = Usbtmc.Capabilities.USB488Interface;
-            Serial.print("USB488Interface:");
+            Serial.print(F("USB488Interface:"));
             Serial.println(interface, HEX);
             if (interface & 0x04)
-                Serial.println("The interface is a 488.2 USB488 interface.");
+                Serial.println(F("The interface is a 488.2 USB488 interface."));
             else
-                Serial.println("The interface is not a 488.2 USB488 interface.");
+                Serial.println(F("The interface is not a 488.2 USB488 interface."));
 
             if (interface & 0x02)
-                Serial.println("The interface accepts REN_CONTROL, GO_TO_LOCAL, and LOCAL_LOCKOUT requests.");
+                Serial.println(F("The interface accepts REN_CONTROL, GO_TO_LOCAL, and LOCAL_LOCKOUT requests."));
             else
-                Serial.println("The interface does not accept REN_CONTROL, GO_TO_LOCAL, and LOCAL_LOCKOUT requests.");
+                Serial.println(F("The interface does not accept REN_CONTROL, GO_TO_LOCAL, and LOCAL_LOCKOUT requests."));
 
             if (interface & 0x01)
-                Serial.println("The interface accepts the MsgID = TRIGGER USBTMC command message and forwards TRIGGER requests to the Function Layer.");
+                Serial.println(F("The interface accepts the MsgID = TRIGGER USBTMC command message and forwards TRIGGER requests to the Function Layer."));
             else
-                Serial.println("The interface does not accept the MsgID = TRIGGER USBTMC command message and forwards TRIGGER requests to the Function Layer.");
+                Serial.println(F("The interface does not accept the MsgID = TRIGGER USBTMC command message and forwards TRIGGER requests to the Function Layer."));
 
             uint8_t device = Usbtmc.Capabilities.USB488Device;
-            Serial.print("USB488Device:");
+            Serial.print(F("USB488Device:"));
             Serial.println(device, HEX);
             if (device & 0x08)
-                Serial.println("The device understands all mandatory SCPI commands.");
+                Serial.println(F("The device understands all mandatory SCPI commands."));
             else
-                Serial.println("The device may not understand all mandatory SCPI commands.");
+                Serial.println(F("The device may not understand all mandatory SCPI commands."));
 
             if (device & 0x04)
-                Serial.println("The device is SR1 capable.");
+                Serial.println(F("The device is SR1 capable."));
             else
-                Serial.println("The device is SR0.");
+                Serial.println(F("The device is SR0."));
 
             if (device & 0x02)
-                Serial.println("The device is RL1 capable.");
+                Serial.println(F("The device is RL1 capable."));
             else
-                Serial.println("The device is RL0.");
+                Serial.println(F("The device is RL0."));
 
             if (device & 0x01)
-                Serial.println("The device is DT1 capable.");
+                Serial.println(F("The device is DT1 capable."));
             else
-                Serial.println("The device is DT0.");
+                Serial.println(F("The device is DT0."));
         }
 
         Usbtmc.Run();
 
-        if (!Usbtmc.IsBlockRequest())
+        if (Usbtmc.IsIdle())
         {
             String receivedText = serialReceive();
             if(receivedText != "")

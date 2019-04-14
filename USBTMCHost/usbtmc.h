@@ -1,6 +1,6 @@
 /*
  * USBTMC class driver for USB Host Shield 2.0 Library
- * Copyright (c) 2018 Naoya Imai
+ * Copyright (c) 2019 Naoya Imai
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,7 +23,10 @@
 #define USBTMC_COMMAND_SIZE 64
 #define USBTMC_REQUEST_SIZE 32
 
-enum USBTMC_State { USBTMC_Request, USBTMC_Receive, USBTMC_Idle };
+enum USBTMC_State { USBTMC_Request, USBTMC_Receive, USBTMC_Idle,
+                    USBTMC_InitiateAbortBulkIn,
+                    USBTMC_PurgingOnAbortBulkIn,
+                    USBTMC_CheckAbortBulkInStatus };
 
 typedef struct {
     uint8_t ReservedArray0[12];
@@ -103,7 +106,7 @@ public:
         return false;
     };
     
-    virtual void OnError(String info __attribute__((unused)));
+    virtual void OnError(String info, bool newline __attribute__((unused)));
 };
 
 // Only single port chips are currently supported by the library,
@@ -122,6 +125,7 @@ class USBTMC : public USBDeviceConfig, public UsbConfigXtracter {
     uint8_t bNumIface; // number of interfaces in the configuration
     uint8_t bNumEP; // total number of EP in the configuration
     
+    uint8_t last_bTag;
     uint8_t bTag;
     USBTMC_State CommandState;
     unsigned long WaitBeginMillis;
@@ -133,6 +137,9 @@ class USBTMC : public USBDeviceConfig, public UsbConfigXtracter {
     uint8_t BulkOut_Data(uint8_t nbytes, uint8_t* dataptr);
     uint8_t BulkOut_Request(uint8_t nbytes);
     uint8_t BulkIn(uint16_t* bytes_rcvd, uint8_t* dataptr);
+    uint8_t PurgeBulkIn(bool isFull);
+    uint8_t InitiateAbortBulkIn(uint8_t* status);
+    uint8_t CheckAbortBulkInStatus(uint8_t* status, uint8_t* bmAbortBulkIn);
     
 public:
     USBTMC(USB* pusb, USBTMCAsyncOper* pasync);
@@ -141,7 +148,7 @@ public:
     
     uint8_t Send(uint8_t nbytes, uint8_t* dataptr);
     void Run();
-    bool IsBlockRequest();
+    bool IsIdle();
     
     // USBDeviceConfig implementation
     uint8_t Init(uint8_t parent, uint8_t port, bool lowspeed);

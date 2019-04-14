@@ -1,6 +1,6 @@
 /*
  * USBTMC class driver for USB Host Shield 2.0 Library
- * Copyright (c) 2018 Naoya Imai
+ * Copyright (c) 2019 Naoya Imai
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -223,8 +223,8 @@ uint8_t USBTMC::Send(uint8_t nbytes, uint8_t* dataptr)
 
     if (rcode)
     {
-        String comment = "USBTMC Send Error: rcode=" + String(rcode, HEX) + "h";
-        pAsync->OnError(comment);
+        pAsync->OnError(F("USBTMC Error on Send: rcode="), false);
+        pAsync->OnError(String(rcode, HEX) + "h", true);
         CommandState = USBTMC_Idle;
     }
 
@@ -234,6 +234,9 @@ uint8_t USBTMC::Send(uint8_t nbytes, uint8_t* dataptr)
 void USBTMC::Run()
 {
     uint8_t rcode = 0;
+    uint8_t status = 0;;
+    bool isFull = false;
+    uint8_t bmAbortBulkIn = 0;
 
     switch (CommandState)
     {
@@ -242,8 +245,6 @@ void USBTMC::Run()
 
             if (rcode)
             {
-                String comment = "USBTMC Request Error: rcode=" + String(rcode, HEX) + "h";
-                pAsync->OnError(comment);
                 CommandState = USBTMC_Idle;
             }
             else
@@ -270,16 +271,13 @@ void USBTMC::Run()
                 currentMillis = millis();
                 if ((currentMillis - WaitBeginMillis) >= 5000)
                 {
-                    String comment = "USBTMC Receive Timeout";
-                    pAsync->OnError(comment);
-                    CommandState = USBTMC_Idle;
+                    pAsync->OnError(F("USBTMC Timeout on Receive"), true);
+                    CommandState = USBTMC_InitiateAbortBulkIn;
                 }
                 
             }
             else if (rcode)
             {
-                String comment = "USBTMC Receive Error: rcode=" + String(rcode, HEX) + "h";
-                pAsync->OnError(comment);
                 CommandState = USBTMC_Idle;
             }
             else
@@ -297,20 +295,84 @@ void USBTMC::Run()
 
             break;
 
+        case USBTMC_InitiateAbortBulkIn:
+            rcode = InitiateAbortBulkIn(&status);
+
+            if (rcode)
+            {
+                CommandState = USBTMC_Idle;
+            }
+            else
+            {
+                if(status == 0x01)  // STATUS_SUCCESS
+                    CommandState = USBTMC_PurgingOnAbortBulkIn;
+                else if(status == 0x81)  // STATUS_TRANSFER_NOT_IN_PROGRESS
+                    CommandState = USBTMC_InitiateAbortBulkIn;
+                else
+                {
+                    pAsync->OnError(F("USBTMC Error on USBTMC_InitiateAbortBulkIn: status="), false);
+                    pAsync->OnError(String(status, HEX) + "h", true);
+                    CommandState = USBTMC_Idle;
+                }
+            }
+
+            break;
+
+        case USBTMC_PurgingOnAbortBulkIn:
+            rcode = PurgeBulkIn(&isFull);
+
+            if (rcode)
+            {
+                CommandState = USBTMC_Idle;
+            }
+            else
+            {
+                if(isFull)
+                    CommandState = USBTMC_PurgingOnAbortBulkIn;
+                else
+                    CommandState = USBTMC_CheckAbortBulkInStatus;
+            }
+
+            break;
+
+        case USBTMC_CheckAbortBulkInStatus:
+            rcode = CheckAbortBulkInStatus(&status, &bmAbortBulkIn);
+
+            if (rcode)
+            {
+                CommandState = USBTMC_Idle;
+            }
+            else
+            {
+                if(status != 0x02)
+                    CommandState = USBTMC_Idle;
+                else
+                {
+                    // USBTMC_STATUS_PENDING
+                    if(bmAbortBulkIn & 0x01 == 0x01)
+                        CommandState = USBTMC_PurgingOnAbortBulkIn;
+                    else
+                        CommandState = USBTMC_CheckAbortBulkInStatus;
+
+                }
+            }
+
+            break;
+
         default:
             break;
     }
 }
 
-bool USBTMC::IsBlockRequest()
+bool USBTMC::IsIdle()
 {
     if (CommandState == USBTMC_Idle)
     {
-        return false;
+        return true;
     }
     else
     {
-        return true;
+        return false;
     }
 }
 
@@ -362,7 +424,7 @@ uint8_t USBTMC::BulkOut_Data(uint8_t nbytes, uint8_t* dataptr)
 
     if (nbytes > USBTMC_COMMAND_SIZE)
     {
-        pAsync->OnError("USBTMC BulkOut Error: Message size must be less than USBTMC_COMMAND_SIZE");
+        pAsync->OnError(F("USBTMC Error on BulkOut_Data: Message size must be less than USBTMC_COMMAND_SIZE"), true);
         rcode = hrUNDEF;
         return rcode;
     }
@@ -375,12 +437,6 @@ uint8_t USBTMC::BulkOut_Data(uint8_t nbytes, uint8_t* dataptr)
     message[1] = bTag;
     //2:bTagInverse
     message[2] = ~bTag;
-    bTag++;
-    if(bTag == 0)
-    {
-        //The Host must set bTag such that 1<=bTag<=255.
-        bTag = 1;
-    }
     //3:Reserved(0x00)
     message[3] = 0x00;
     //4,5,6,7:TransferSize
@@ -405,10 +461,21 @@ uint8_t USBTMC::BulkOut_Data(uint8_t nbytes, uint8_t* dataptr)
         quotient++;
 
     rcode = pUsb->outTransfer(bAddress, epInfo[epDataOutIndex].epAddr, (quotient * 4), &message[0]);
-    if (rcode && rcode != hrNAK)
+    if (rcode)
     {
-        Release();
+        pAsync->OnError(F("USBTMC Error on BulkOut_Data: rcode="), false);
+        pAsync->OnError(String(rcode, HEX) + "h", true);
+        return rcode;
     }
+
+    last_bTag = bTag;
+    bTag++;
+    if(bTag == 0)
+    {
+        //The Host must set bTag such that 1<=bTag<=255.
+        bTag = 1;
+    }
+    
     return rcode;
 
 #undef DEV_MESSAGE_BEGIN
@@ -428,12 +495,6 @@ uint8_t USBTMC::BulkOut_Request(uint8_t nbytes)
     message[1] = bTag;
     //2:bTagInverse
     message[2] = ~bTag;
-    bTag++;
-    if(bTag == 0)
-    {
-        //The Host must set bTag such that 1<=bTag<=255.
-        bTag = 1;
-    }
     //3:Reserved(0x00)
     message[3] = 0x00;
     //4,5,6,7:TransferSize
@@ -450,10 +511,21 @@ uint8_t USBTMC::BulkOut_Request(uint8_t nbytes)
     message[11] = 0x00;
 
     rcode = pUsb->outTransfer(bAddress, epInfo[epDataOutIndex].epAddr, messageSize, &message[0]);
-    if (rcode && rcode != hrNAK)
+    if (rcode)
     {
-        Release();
+        pAsync->OnError(F("USBTMC Error on BulkOut_Request: rcode="), false);
+        pAsync->OnError(String(rcode, HEX) + "h", true);
+        return rcode;
     }
+    
+    last_bTag = bTag;
+    bTag++;
+    if(bTag == 0)
+    {
+        //The Host must set bTag such that 1<=bTag<=255.
+        bTag = 1;
+    }
+    
     return rcode;
 
 #undef MESSAGE_SIZE
@@ -472,18 +544,19 @@ uint8_t USBTMC::BulkIn(uint16_t* bytes_rcvd, uint8_t* dataptr)
     if (rcode == hrNAK)
     {
         *bytes_rcvd = 0;
-        return rcode;
+        return rcode;      
     }
-    else if (rcode)
+    if (rcode)
     {
+        pAsync->OnError(F("USBTMC Error on BulkIn: rcode="), false);
+        pAsync->OnError(String(rcode, HEX) + "h", true);
         *bytes_rcvd = 0;
-        Release();
         return rcode;
     }
 
     if (rcvd < EXPECTED_SIZE)
     {
-        pAsync->OnError("USBTMC BulkIn Error: Received unexpected size");
+        pAsync->OnError(F("USBTMC Error on BulkIn: Received unexpected size"), true);
         *bytes_rcvd = 0;
         rcode = hrUNDEF;
         return rcode;
@@ -502,7 +575,7 @@ uint8_t USBTMC::BulkIn(uint16_t* bytes_rcvd, uint8_t* dataptr)
 
     if (data_size > *bytes_rcvd)
     {
-        pAsync->OnError("USBTMC BulkIn Error: Received transferSize is overflow in packet");
+        pAsync->OnError(F("USBTMC Error on BulkIn: Received transferSize is overflow in packet"), true);
         *bytes_rcvd = 0;
         rcode = hrUNDEF;
         return rcode;
@@ -516,6 +589,79 @@ uint8_t USBTMC::BulkIn(uint16_t* bytes_rcvd, uint8_t* dataptr)
     return rcode;
 
 #undef EXPECTED_SIZE
+}
+
+uint8_t USBTMC::PurgeBulkIn(bool isFull)
+{
+    uint8_t packet_size = epInfo[epDataInIndex].maxPktSize;
+    uint8_t message[packet_size];
+    uint16_t rcvd = packet_size;
+    uint8_t rcode = 0;
+
+    rcode = pUsb->inTransfer(bAddress, epInfo[epDataInIndex].epAddr, &rcvd, message);
+    if (rcode)
+    {
+        pAsync->OnError(F("USBTMC Error on PurgeBulkIn: rcode=" ), false);
+        pAsync->OnError(String(rcode, HEX) + "h", true);
+        return rcode;
+    }
+
+    if (rcvd == packet_size)
+    {
+        isFull = true;
+    }
+
+    return rcode;
+
+}
+
+uint8_t USBTMC::InitiateAbortBulkIn(uint8_t* status)
+{
+    uint8_t rcode = 0;
+
+    // USBTMC INITIATE ABORT BULKIN
+    // bRequest = 0x03(3) Initiate Abort BulkIn
+    // wValLo = bTag.
+    // wValHi = 0x00 Reserved. Must be 0x00.
+    // total, nbytes = 0x0002
+    uint8_t response[2];
+    uint16_t wInd = 0x80 + epInfo[epDataInIndex].epAddr;
+    rcode = pUsb->ctrlReq(bAddress, 0, (USB_SETUP_DEVICE_TO_HOST|USB_SETUP_TYPE_CLASS|USB_SETUP_RECIPIENT_INTERFACE), 0x03, last_bTag, 0x00, wInd, 0x0002, 0x0002, response, NULL);
+    if (rcode)
+    {
+        pAsync->OnError(F("USBTMC Error on InitiateAbortBulkIn: rcode="), false);
+        pAsync->OnError(String(rcode, HEX) + "h", true);
+        return rcode;
+    }
+
+    *status = response[0];
+
+    return rcode;
+}
+
+uint8_t USBTMC::CheckAbortBulkInStatus(uint8_t* status, uint8_t* bmAbortBulkIn)
+{
+    uint8_t rcode = 0;
+
+    // USBTMC INITIATE ABORT BULKIN
+    // bRequest = 0x04(4) CHECK ABORT BULKIN STATUS
+    // wValLo = bTag.
+    // wValHi = 0x00 Reserved. Must be 0x00.
+    // total, nbytes = 0x0008
+    uint8_t response[8];
+    uint16_t wInd = 0x80 + epInfo[epDataInIndex].epAddr;
+    rcode = pUsb->ctrlReq(bAddress, 0, (USB_SETUP_DEVICE_TO_HOST|USB_SETUP_TYPE_CLASS|USB_SETUP_RECIPIENT_ENDPOINT), 0x04, 0x00, 0x00, wInd, 0x0008, 0x0008, response, NULL);
+    if (rcode)
+    {
+        pAsync->OnError(F("USBTMC Error on CheckAbortBulkInStatus: rcode="), false);
+        pAsync->OnError(String(rcode, HEX) + "h", true);
+        return rcode;
+    }
+
+    *status = response[0];
+    *bmAbortBulkIn = response[1];
+
+    return rcode;
 }
 
 void USBTMC::PrintEndpointDescriptor(const USB_ENDPOINT_DESCRIPTOR* ep_ptr)
