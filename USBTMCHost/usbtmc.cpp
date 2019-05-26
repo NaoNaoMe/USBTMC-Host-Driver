@@ -319,7 +319,7 @@ void USBTMC::Run()
             break;
 
         case USBTMC_PurgingOnAbortBulkIn:
-            rcode = PurgeBulkIn(&isFull);
+            rcode = PurgeBulkIn(isFull);
 
             if (rcode)
             {
@@ -591,7 +591,7 @@ uint8_t USBTMC::BulkIn(uint16_t* bytes_rcvd, uint8_t* dataptr)
 #undef EXPECTED_SIZE
 }
 
-uint8_t USBTMC::PurgeBulkIn(bool isFull)
+uint8_t USBTMC::PurgeBulkIn(bool &isFull)
 {
     uint8_t packet_size = epInfo[epDataInIndex].maxPktSize;
     uint8_t message[packet_size];
@@ -606,9 +606,13 @@ uint8_t USBTMC::PurgeBulkIn(bool isFull)
         return rcode;
     }
 
-    if (rcvd == packet_size)
+    if (rcvd >= packet_size)
     {
         isFull = true;
+    }
+	else
+	{
+        isFull = false;
     }
 
     return rcode;

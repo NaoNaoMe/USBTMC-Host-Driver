@@ -137,7 +137,7 @@ class USBTMC : public USBDeviceConfig, public UsbConfigXtracter {
     uint8_t BulkOut_Data(uint8_t nbytes, uint8_t* dataptr);
     uint8_t BulkOut_Request(uint8_t nbytes);
     uint8_t BulkIn(uint16_t* bytes_rcvd, uint8_t* dataptr);
-    uint8_t PurgeBulkIn(bool isFull);
+    uint8_t PurgeBulkIn(bool &isFull);
     uint8_t InitiateAbortBulkIn(uint8_t* status);
     uint8_t CheckAbortBulkInStatus(uint8_t* status, uint8_t* bmAbortBulkIn);
     
