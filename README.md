@@ -21,7 +21,14 @@ The USB Type B device port offers instrument control.
 Some example sketches are stored in the [Examples folder](Examples).
 
 
-# Quick Start sketch
+# Quick Start sketch(V2)
+[USBTMCHostV2](USBTMCHostV2) supports binary transmit, reading status byte, and clearing pending transations.
+The following demonstration queries instrument identification(*IDN?) in various way and shows some new features.
+
+![Example-serial-monitor](mdContents/SerialMonitorExampleV2.gif)
+
+
+# Quick Start sketch(V1)
 I wrote a sketch that converts USBTMC to Serial communication.
 
 The sketch shows up some USBTMC information(Capabilities) on serial monitor when you plug USBTMC devices into the USB Host Shield.
