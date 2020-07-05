@@ -1186,7 +1186,15 @@ uint8_t USBTMC::ClearFeature(uint8_t index)
     // wValHi = 0x00
     // total, nbytes = 0x0000
     uint16_t wInd = ((index == epDataInIndex) ? (0x80 | epInfo[index].epAddr) : epInfo[index].epAddr);
-    return pUsb->ctrlReq(bAddress, 0, (USB_SETUP_HOST_TO_DEVICE | USB_SETUP_TYPE_STANDARD | USB_SETUP_RECIPIENT_ENDPOINT), USB_REQUEST_CLEAR_FEATURE, USB_FEATURE_ENDPOINT_HALT, 0, wInd, 0, 0, NULL, NULL);
+    rcode = pUsb->ctrlReq(bAddress, 0, (USB_SETUP_HOST_TO_DEVICE | USB_SETUP_TYPE_STANDARD | USB_SETUP_RECIPIENT_ENDPOINT), USB_REQUEST_CLEAR_FEATURE, USB_FEATURE_ENDPOINT_HALT, 0, wInd, 0, 0, NULL, NULL);
+
+    if(rcode)
+        return rcode;
+    
+    epInfo[index].bmSndToggle = 0;
+    epInfo[index].bmRcvToggle = 0;
+
+    return 0;
 }
 
 // long message fifo for transmit
