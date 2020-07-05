@@ -8,7 +8,9 @@ You can create your user interface or recall your favorite settings when you pre
 
 Some measurement instruments disabled remote control by default, so you need to enable USBTMC(or remote control) followed the instruction manual.
 
-You can find a demonstration on my [youtube channel](https://youtu.be/sLFJQBhXwgE).
+You can find a demonstration on my [youtube channel](https://youtu.be/sLFJQBhXwgE).  
+You might also be interested in [webusbtmc](https://github.com/ananswer/webusbtmc).
+You can control test and measurement instruments on your browser.
 
 # Where is the USBTMC?
 You can find it on your instrument's back panel.
