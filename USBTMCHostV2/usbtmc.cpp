@@ -24,7 +24,8 @@ const uint8_t USBTMC::epDataInIndex = 1;
 const uint8_t USBTMC::epDataOutIndex = 2;
 const uint8_t USBTMC::epInterruptInIndex = 3;
 
-USBTMC::USBTMC(USB* p, USBTMCAsyncOper * pasync) : pAsync(pasync), pUsb(p), bAddress(0), bNumEP(1), bTag(1), rtb_bTag(2), commandState(USBTMCState::Idle), bin_current_size(0), previousMillis(0), timestepMillis(0)
+USBTMC::USBTMC(USB* p, USBTMCAsyncOper * pasync, uint16_t vid, uint16_t pid) : 
+    pAsync(pasync), pUsb(p), targetVID(vid), targetPID(pid), serialNumberDataPtr(NULL), bAddress(0), bNumEP(1), bTag(1), rtb_bTag(2), commandState(USBTMCState::Idle), bin_current_size(0), previousMillis(0), timestepMillis(0), isConnected(false)
 {
     fifo_flush();
 
@@ -83,8 +84,40 @@ uint8_t USBTMC::Init(uint8_t parent, uint8_t port, bool lowspeed)
 
     if (rcode)
         goto FailGetDevDescr;
+    
+    if (targetVID != 0 || targetPID != 0)
+    {
+        if (udd->idVendor != targetVID || udd->idProduct != targetPID)
+        {
+            rcode = USB_DEV_CONFIG_ERROR_DEVICE_NOT_SUPPORTED;
+            goto FailOnInit;
+        }
+    }
 
-    pAsync->OnRcvdDescr(pUsb, udd);
+    uint8_t serialNumData[255];
+    uint8_t serialNumLength;
+    GetStringDescriptor(0, udd->iSerialNumber, serialNumData, &serialNumLength);
+
+    if (serialNumberDataPtr != NULL)
+    {
+        bool isValid = true;
+        for (int i=0; i < serialNumLength; i++)
+        {
+            if (serialNumData[i] != pgm_read_byte(serialNumberDataPtr + i))
+            {
+                isValid = false;
+                break;
+            }
+        }
+
+        if (!isValid)
+        {
+            rcode = USB_DEV_CONFIG_ERROR_DEVICE_NOT_SUPPORTED;
+            goto FailOnInit;
+        }
+    }
+
+    pAsync->OnRcvdDescr(pUsb, udd, serialNumData, serialNumLength);
 
 
     // Allocate new address according to device class
@@ -173,6 +206,8 @@ uint8_t USBTMC::Init(uint8_t parent, uint8_t port, bool lowspeed)
             goto FailOnInit;
     }
 
+    isConnected = true;
+
     return 0;
 
 FailGetDevDescr:
@@ -209,9 +244,57 @@ Fail:
     return rcode;
 }
 
+uint8_t USBTMC::GetStringDescriptor(uint8_t addr, uint8_t idx, uint8_t* dataptr, uint8_t* datalen)
+{
+    uint8_t rcode;
+    uint8_t length;
+    uint16_t langid;
+
+    // get language table length
+    rcode = pUsb->getStrDescr(addr, 0, 1, 0, 0, dataptr);  
+    if (rcode)
+    {
+        return rcode;
+    }
+
+    length = dataptr[ 0 ];      //length is the first byte
+    // get language table
+    rcode = pUsb->getStrDescr(addr, 0, length, 0, 0, dataptr);
+    if (rcode)
+    {
+        return rcode;
+    }
+
+    langid = (dataptr[3] << 8) | dataptr[2];
+    rcode = pUsb->getStrDescr(addr, 0, 1, idx, langid, dataptr);
+    if (rcode)
+    {
+        return rcode;
+    }
+
+    *datalen = dataptr[ 0 ];
+    rcode = pUsb->getStrDescr(addr, 0, *datalen, idx, langid, dataptr);
+    if (rcode)
+    {
+        return rcode;
+    }
+
+    return rcode;
+}
+
+bool USBTMC::IsConnected()
+{
+    return isConnected;
+}
+
 void USBTMC::Clear()
 {
     commandState = USBTMCState::InitiateClear;
+}
+
+void USBTMC::SetTargetSerialNumber(const uint8_t* serialNumPtr)
+{
+    serialNumberDataPtr = serialNumPtr;
 }
 
 void USBTMC::Request(int length)
@@ -785,6 +868,7 @@ uint8_t USBTMC::Release()
 
     pUsb->GetAddressPool().FreeAddress(bAddress);
 
+    isConnected = false;
     bAddress = 0;
     bNumEP = 1;
     return rcode;

@@ -21,19 +21,38 @@ static bool isTransmitOnBin = false;
 class USBTMCAsync : public USBTMCAsyncOper
 {
   public:
-    void OnRcvdDescr(USB* pUsb, USB_DEVICE_DESCRIPTOR* pdescr);
+    void OnRcvdDescr(USB* pUsb, USB_DEVICE_DESCRIPTOR* pdescr, uint8_t* serialNumPtr, uint8_t serialNumLen);
     void OnReceived(uint8_t data);
     void OnReadStatusByte(uint8_t status);
     void OnFailed(USBTMCInformation info, uint8_t code);
 };
 
-void USBTMCAsync::OnRcvdDescr(USB* pUsb, USB_DEVICE_DESCRIPTOR* pdescr)
+void USBTMCAsync::OnRcvdDescr(USB* pUsb, USB_DEVICE_DESCRIPTOR* pdescr, uint8_t* serialNumPtr, uint8_t serialNumLen)
 {
   Serial.print(F("ProductID:"));
   Serial.println(pdescr->idProduct, HEX);
 
   Serial.print(F("VendorID:"));
   Serial.println(pdescr->idVendor, HEX);
+
+  Serial.print(F("SerialNumberLength:"));
+  Serial.println(serialNumLen);
+  
+  Serial.println(F("SerialNumberData:"));
+  for(int i=0; i < serialNumLen; i++)
+  {
+      Serial.print("0x");
+      Serial.print(serialNumPtr[i], HEX);
+      Serial.print(",");
+  }
+
+  Serial.println("");
+  Serial.println(F("SerialNumberData(Char):"));
+  for ( int i = 2; i < serialNumLen; i += 2 ) {   //string is UTF-16LE encoded
+    Serial.print((char) serialNumPtr[i]);
+  }
+
+  Serial.println("");
   
 }
 
@@ -106,8 +125,12 @@ void USBTMCAsync::OnFailed(USBTMCInformation info, uint8_t code)
 }
 
 USB Usb;
+//USBHub Hub1(&Usb);
 USBTMCAsync UsbtmcAsync;
-USBTMC Usbtmc(&Usb, &UsbtmcAsync);
+//USBTMC Usbtmc(&Usb, &UsbtmcAsync);
+USBTMC Usbtmc(&Usb, &UsbtmcAsync, 0x0957, 0x0618); // Agilent Technologies,34405A
+const uint8_t DMMSerialNumber[] PROGMEM = {0x16,0x3,0x4D,0x0,0x59,0x0,0x30,0x0,0x30,0x0,0x30,0x0,0x30,0x0,0x31,0x0,0x32,0x0,0x33,0x0,0x34,0x0}; // MY00001234
+
 
 void setup()
 {
@@ -124,6 +147,8 @@ void setup()
 
     Usbtmc.TimeStep(0); // Try to change timestep when you can not receive all of the data.
                         // Some test and measurement instruments can not respond quickly.
+    //Usbtmc.SetTargetSerialNumber(DMMSerialNumber);
+    
 }
 
 void loop()

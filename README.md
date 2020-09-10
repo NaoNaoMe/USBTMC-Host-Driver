@@ -24,7 +24,7 @@ Some example sketches are stored in the [Examples folder](Examples).
 
 
 # Quick Start sketch(V2)
-[USBTMCHostV2](USBTMCHostV2) supports binary transmit, reading status byte, and clearing pending transations.
+[USBTMCHostV2](USBTMCHostV2) supports binary transmit, reading status byte, clearing pending transactions, and to identify(VID and PID, or Serial Number) the devices you want to use when you use USB hub.
 The following demonstration queries instrument identification(*IDN?) in various way and shows some new features.
 
 ![Example-serial-monitor](mdContents/SerialMonitorExampleV2.gif)

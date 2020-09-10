@@ -171,7 +171,7 @@ class USBTMC;
 class USBTMCAsyncOper
 {
 public:
-    virtual void OnRcvdDescr(USB* pUsb, USB_DEVICE_DESCRIPTOR* pdescr __attribute__((unused)));
+    virtual void OnRcvdDescr(USB* pUsb, USB_DEVICE_DESCRIPTOR* pdescr, uint8_t* serialNumPtr, uint8_t serialNumLen __attribute__((unused)));
 
     virtual void OnReceived(uint8_t data __attribute__((unused)));
     
@@ -195,6 +195,10 @@ class USBTMC : public USBDeviceConfig, public UsbConfigXtracter {
     uint8_t bConfNum; // configuration number
     uint8_t bNumIface; // number of interfaces in the configuration
     uint8_t bNumEP; // total number of EP in the configuration
+    bool isConnected;
+    uint16_t targetVID;
+    uint16_t targetPID;
+    const uint8_t* serialNumberDataPtr;
     
     uint8_t last_bTag;
     uint8_t bTag;
@@ -219,7 +223,7 @@ class USBTMC : public USBDeviceConfig, public UsbConfigXtracter {
     bool isSentHeader;
     bool isResume;
 
-    uint8_t GetStringDescriptor(uint8_t index, uint8_t* dataptr);
+    uint8_t GetStringDescriptor(uint8_t addr, uint8_t idx, uint8_t* dataptr, uint8_t* length);
 
     uint8_t InitiateAbortBulkOut(uint8_t &status);
     uint8_t CheckAbortBulkOutStatus(uint8_t &status);
@@ -248,9 +252,11 @@ class USBTMC : public USBDeviceConfig, public UsbConfigXtracter {
     void fifo_flush();
     
 public:
-    USBTMC(USB* pusb, USBTMCAsyncOper* pasync);
+    USBTMC(USB* pusb, USBTMCAsyncOper* pasync, uint16_t vid=0, uint16_t pid=0);
 
     USBTMCCapabilities Capabilities;
+    bool    IsConnected();
+    void    SetTargetSerialNumber(const uint8_t* serialNumPtr);
     
     void    Clear();
     void    Request(int length);
@@ -276,11 +282,10 @@ public:
     // USBDeviceConfig implementation
     uint8_t Init(uint8_t parent, uint8_t port, bool lowspeed);
     uint8_t Release();
-    virtual uint8_t GetAddress()
-    {
+    uint8_t GetAddress() {
         return bAddress;
     };
-    
+
     // UsbConfigXtracter implementation
     void EndpointXtract(uint8_t conf, uint8_t iface, uint8_t alt, uint8_t proto, const USB_ENDPOINT_DESCRIPTOR* ep);
     
