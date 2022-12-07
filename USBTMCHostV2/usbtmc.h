@@ -1,6 +1,6 @@
 /*
  * USBTMC class driver for USB Host Shield 2.0 Library
- * Copyright (c) 2020 Naoya Imai
+ * Copyright (c) 2022 Naoya Imai
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,7 +29,9 @@
 
 enum class USBTMCState {
     Pause,
-    ReceiveHeader, ReceivePayload, Idle,
+    ReceiveHeader,
+    ReceivePayload,
+    Idle,
     InitiateAbortBulkOut,
     CheckAbortBulkOutStatus,
     InitiateAbortBulkIn,
@@ -41,7 +43,7 @@ enum class USBTMCState {
     ClearFeature
 };
 
-enum class USBTMCInformation : int16_t{
+enum class USBTMCInformation : int16_t {
     AbortbulkinSucceed              = 1,
     ClaerSucceed                    = 2,
     TransmitError                   = -1,
@@ -65,7 +67,7 @@ enum class USBTMCInformation : int16_t{
     ClearfeatureError               = -19
 };
 
-typedef struct tagUSBTMC_CAPABILITIES{
+typedef struct tagUSBTMC_CAPABILITIES {
     // GET_CAPABILITIES response on USBTMC Specification
     uint8_t USBTMC_status;
 
@@ -171,13 +173,13 @@ class USBTMC;
 class USBTMCAsyncOper
 {
 public:
-    virtual void OnRcvdDescr(USB* pUsb, USB_DEVICE_DESCRIPTOR* pdescr, uint8_t* serialNumPtr, uint8_t serialNumLen __attribute__((unused)));
+    virtual void OnRcvdDescr(USB_DEVICE_DESCRIPTOR *pdescr, uint8_t *serialNumPtr __attribute__((unused)), uint8_t serialNumLen __attribute__((unused)));
 
-    virtual void OnReceived(uint8_t data __attribute__((unused)));
+    virtual void OnReceived(uint8_t data);
     
-    virtual void OnReadStatusByte(uint8_t status __attribute__((unused)));
+    virtual void OnReadStatusByte(uint8_t status);
 
-    virtual void OnFailed(USBTMCInformation info, uint8_t code __attribute__((unused)));
+    virtual void OnFailed(USBTMCInformation info, uint8_t code);
 };
 
 // Only single port chips are currently supported by the library,
@@ -189,8 +191,8 @@ class USBTMC : public USBDeviceConfig, public UsbConfigXtracter {
     static const uint8_t epDataOutIndex; // DataOUT endpoint index
     static const uint8_t epInterruptInIndex; // InterruptIN  endpoint index
     
-    USBTMCAsyncOper* pAsync;
-    USB* pUsb;
+    USBTMCAsyncOper *pAsync;
+    USB *pUsb;
     uint8_t bAddress;
     uint8_t bConfNum; // configuration number
     uint8_t bNumIface; // number of interfaces in the configuration
@@ -198,7 +200,7 @@ class USBTMC : public USBDeviceConfig, public UsbConfigXtracter {
     bool isConnected;
     uint16_t targetVID;
     uint16_t targetPID;
-    const uint8_t* serialNumberDataPtr;
+    const uint8_t *serialNumberDataPtr;
     
     uint8_t last_bTag;
     uint8_t bTag;
@@ -223,7 +225,7 @@ class USBTMC : public USBDeviceConfig, public UsbConfigXtracter {
     bool isSentHeader;
     bool isResume;
 
-    uint8_t GetStringDescriptor(uint8_t addr, uint8_t idx, uint8_t* dataptr, uint8_t* length);
+    uint8_t GetStringDescriptor(uint8_t addr, uint8_t idx, uint8_t *dataptr, uint8_t *length);
 
     uint8_t InitiateAbortBulkOut(uint8_t &status);
     uint8_t CheckAbortBulkOutStatus(uint8_t &status);
@@ -231,17 +233,17 @@ class USBTMC : public USBDeviceConfig, public UsbConfigXtracter {
     uint8_t CheckAbortBulkInStatus(uint8_t &status, uint8_t &bmAbortBulkIn);
     uint8_t InitiateClear(uint8_t &status);
     uint8_t CheckClearStatus(uint8_t &status, uint8_t &bmAbortBulkIn);
-    uint8_t GetCapabilities(USBTMCCapabilities* pCapabilities);
+    uint8_t GetCapabilities(USBTMCCapabilities *pCapabilities);
 
     uint8_t PurgeBulkIn(bool &isFull);
 
     uint8_t ClearFeature(uint8_t index);
 
-    uint8_t BulkOutData(uint8_t nbytes, uint8_t* dataptr, uint32_t totalbytes);
-    uint8_t BulkOutData(uint8_t nbytes, uint8_t* dataptr);
+    uint8_t BulkOutData(uint8_t nbytes, uint8_t *dataptr, uint32_t totalbytes);
+    uint8_t BulkOutData(uint8_t nbytes, uint8_t *dataptr);
     uint8_t BulkOutRequest(uint32_t nbytes);
-    uint8_t BulkIn(uint16_t* bytes_rcvd, uint8_t* dataptr, uint32_t &length);
-    uint8_t BulkIn(uint16_t* bytes_rcvd, uint8_t* dataptr);
+    uint8_t BulkIn(uint16_t *bytes_rcvd, uint8_t *dataptr, uint32_t &length);
+    uint8_t BulkIn(uint16_t *bytes_rcvd, uint8_t *dataptr);
 
     uint8_t ReadStatusByteFromInterruptEP(uint8_t &status, uint8_t previous_btag);
 
@@ -252,17 +254,17 @@ class USBTMC : public USBDeviceConfig, public UsbConfigXtracter {
     void fifo_flush();
     
 public:
-    USBTMC(USB* pusb, USBTMCAsyncOper* pasync, uint16_t vid=0, uint16_t pid=0);
+    USBTMC(USB *pusb, USBTMCAsyncOper *pasync, uint16_t vid = 0, uint16_t pid = 0);
 
     USBTMCCapabilities Capabilities;
     bool    IsConnected();
-    void    SetTargetSerialNumber(const uint8_t* serialNumPtr);
+    void SetTargetSerialNumber(const uint8_t *serialNumPtr);
     
     void    Clear();
     void    Request(int length);
     void    ReadStatusByte();
 
-    void    Transmit(uint8_t nbytes, uint8_t* dataptr);
+    void Transmit(uint8_t nbytes, uint8_t *dataptr);
     void    BeginTransmit(uint32_t total_size);
     void    TransmitData(uint8_t data);
     bool    TransmitDone();
@@ -270,7 +272,7 @@ public:
     void    AbortReceive();
     void    AbortTransmit();
 
-    void    Run(bool isEnable);
+    void Run();
     bool    IsIdle();
     bool    IsPause();
 
@@ -287,7 +289,7 @@ public:
     };
 
     // UsbConfigXtracter implementation
-    void EndpointXtract(uint8_t conf, uint8_t iface, uint8_t alt, uint8_t proto, const USB_ENDPOINT_DESCRIPTOR* ep);
+    void EndpointXtract(uint8_t conf, uint8_t iface, uint8_t alt, uint8_t proto, const USB_ENDPOINT_DESCRIPTOR *ep);
     
 };
 

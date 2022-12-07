@@ -1,6 +1,6 @@
 /*
  * USBTMC class driver for USB Host Shield 2.0 Library
- * Copyright (c) 2020 Naoya Imai
+ * Copyright (c) 2022 Naoya Imai
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -117,7 +117,7 @@ uint8_t USBTMC::Init(uint8_t parent, uint8_t port, bool lowspeed)
         }
     }
 
-    pAsync->OnRcvdDescr(pUsb, udd, serialNumData, serialNumLength);
+    pAsync->OnRcvdDescr(udd, serialNumData, serialNumLength);
 
 
     // Allocate new address according to device class
@@ -491,7 +491,7 @@ void USBTMC::AbortTransmit()
     commandState = USBTMCState::InitiateAbortBulkOut;
 }
 
-void USBTMC::Run(bool isEnable)
+void USBTMC::Run()
 {
 #define BUFFER_LENGTH 64
     uint8_t rcode = 0;
@@ -504,8 +504,7 @@ void USBTMC::Run(bool isEnable)
 
     USBTMCState state;
 
-    if(isEnable == false)
-    {
+    if (pUsb->getUsbTaskState() != USB_STATE_RUNNING) {
         commandState = USBTMCState::Idle;
         return;
     }
