@@ -7,3 +7,4 @@
 | Keysight/Agilent    | 34405A(DMM) |  [ValidationExample](ValidationExample)| Specifying VID, PID, and serial number.(Specifying the serial number is disabled) |
 | Keysight/Agilent    | U2741A(USB Modular instruments) |  [USBModularInstruments](USBModularInstruments)| Change to USBTMC device from the initial state. |
 | Tektronix           | TBS2000B |  [TekScopeWithIRremote](TekScopeWithIRremote)| Run/Stop using IR receiver |
+| Keysight           | InfiniiVision 2000 X |  [KeysightScopeWithIRremote](KeysightScopeWithIRremote)| Run/Stop using IR receiver |
